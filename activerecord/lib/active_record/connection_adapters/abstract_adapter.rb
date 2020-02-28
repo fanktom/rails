@@ -64,7 +64,11 @@ module ActiveRecord
         end
       end
 
+      DEFAULT_READ_QUERY = [:begin, :commit, :explain, :release, :rollback, :savepoint, :select, :with] # :nodoc:
+      private_constant :DEFAULT_READ_QUERY
+
       def self.build_read_query_regexp(*parts) # :nodoc:
+        parts += DEFAULT_READ_QUERY
         parts = parts.map { |part| /#{part}/i }
         /\A(?:[\(\s]|#{COMMENT_REGEX})*#{Regexp.union(*parts)}/
       end
@@ -126,14 +130,19 @@ module ActiveRecord
       def schema_migration # :nodoc:
         @schema_migration ||= begin
                                 conn = self
-                                spec_name = conn.pool.spec.name
-                                name = "#{spec_name}::SchemaMigration"
+                                name = conn.pool.db_config.name
+                                schema_migration_name = "#{name}::SchemaMigration"
 
                                 Class.new(ActiveRecord::SchemaMigration) do
-                                  define_singleton_method(:name) { name }
-                                  define_singleton_method(:to_s) { name }
+                                  define_singleton_method(:name) { schema_migration_name }
+                                  define_singleton_method(:to_s) { schema_migration_name }
 
-                                  self.connection_specification_name = spec_name
+                                  connection_handler.connection_pool_names.each do |pool_name|
+                                    if conn.pool == connection_handler.retrieve_connection_pool(pool_name)
+                                      self.connection_specification_name = pool_name
+                                      break
+                                    end
+                                  end
                                 end
                               end
       end
@@ -274,6 +283,10 @@ module ActiveRecord
         false
       end
 
+      def supports_partitioned_indexes?
+        false
+      end
+
       # Does this adapter support index sort order?
       def supports_index_sort_order?
         false
@@ -375,6 +388,10 @@ module ActiveRecord
 
       # Does this adapter support optimizer hints?
       def supports_optimizer_hints?
+        false
+      end
+
+      def supports_common_table_expressions?
         false
       end
 
@@ -669,7 +686,6 @@ module ActiveRecord
             binds:             binds,
             type_casted_binds: type_casted_binds,
             statement_name:    statement_name,
-            connection_id:     object_id,
             connection:        self) do
             @lock.synchronize do
               yield

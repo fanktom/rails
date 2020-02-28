@@ -284,9 +284,9 @@ module ActiveRecord
     # * Integer - Finds the record with this primary key.
     # * String - Finds the record with a primary key corresponding to this
     #   string (such as <tt>'5'</tt>).
-    # * Array - Finds the record that matches these +find+-style conditions
+    # * Array - Finds the record that matches these +where+-style conditions
     #   (such as <tt>['name LIKE ?', "%#{query}%"]</tt>).
-    # * Hash - Finds the record that matches these +find+-style conditions
+    # * Hash - Finds the record that matches these +where+-style conditions
     #   (such as <tt>{name: 'David'}</tt>).
     # * +false+ - Returns always +false+.
     # * No args - Returns +false+ if the relation is empty, +true+ otherwise.
@@ -384,7 +384,16 @@ module ActiveRecord
         )
         relation = except(:includes, :eager_load, :preload).joins!(join_dependency)
 
-        if eager_loading && !using_limitable_reflections?(join_dependency.reflections)
+        if eager_loading && !(
+            using_limitable_reflections?(join_dependency.reflections) &&
+            using_limitable_reflections?(
+              construct_join_dependency(
+                select_association_list(joins_values).concat(
+                  select_association_list(left_outer_joins_values)
+                ), nil
+              ).reflections
+            )
+        )
           if has_limit_or_offset?
             limited_ids = limited_ids_for(relation)
             limited_ids.empty? ? relation.none! : relation.where!(primary_key => limited_ids)
@@ -551,7 +560,11 @@ module ActiveRecord
 
       def ordered_relation
         if order_values.empty? && (implicit_order_column || primary_key)
-          order(arel_attribute(implicit_order_column || primary_key).asc)
+          if implicit_order_column && primary_key && implicit_order_column != primary_key
+            order(arel_attribute(implicit_order_column).asc, arel_attribute(primary_key).asc)
+          else
+            order(arel_attribute(implicit_order_column || primary_key).asc)
+          end
         else
           self
         end

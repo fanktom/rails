@@ -90,11 +90,11 @@ INFO. Autoload paths are called _root directories_ in Zeitwerk documentation, bu
 
 Within an autoload path, file names must match the constants they define as documented [here](https://github.com/fxn/zeitwerk#file-structure).
 
-By default, the autoload paths of an application consist of all the subdirectories of `app` that exist when the application boots ---except for `assets`, `javascripts`, `views`,--- plus the autoload paths of engines it might depend on.
+By default, the autoload paths of an application consist of all the subdirectories of `app` that exist when the application boots ---except for `assets`, `javascript`, `views`,--- plus the autoload paths of engines it might depend on.
 
 For example, if `UsersHelper` is implemented in `app/helpers/users_helper.rb`, the module is autoloadable, you do not need (and should not write) a `require` call for it:
 
-```
+```bash
 $ bin/rails runner 'p UsersHelper'
 UsersHelper
 ```
@@ -133,7 +133,7 @@ In a Rails console there is no file watcher active regardless of the value of `c
 
 However, you can force a reload in the console executing `reload!`:
 
-```
+```bash
 $ bin/rails c
 Loading development environment (Rails 6.0.0)
 irb(main):001:0> User.object_id
@@ -171,7 +171,7 @@ Similarly, in the Rails console, if you have a user instance and reload:
 > reload!
 ```
 
-the `user` object is instance of a stale class object. Ruby gives you a new class if you evaluate `User` again, but does not update the class `user` is instance of.
+the `user` object is an instance of a stale class object. Ruby gives you a new class if you evaluate `User` again, but does not update the class `user` is an instance of.
 
 Another use case of this gotcha is subclassing reloadable classes in a place that is not reloaded:
 
@@ -233,8 +233,7 @@ module StiPreload
             select(inheritance_column).
             distinct.
             pluck(inheritance_column).
-            compact.
-            each(&:constantize)
+            compact
 
         types_in_db.each do |type|
           logger.debug("Preloading STI type #{type}")
@@ -274,44 +273,43 @@ By default, Rails uses `String#camelize` to know which constant should a given f
 
 It could be the case that some particular file or directory name does not get inflected as you want. For instance, `html_parser.rb` is expected to define `HtmlParser` by default. What if you prefer the class to be `HTMLParser`? There are a few ways to customize this.
 
-The easiest way is to define an acronym in `config/initializers/inflections.rb`:
+The easiest way is to define acronyms in `config/initializers/inflections.rb`:
 
 ```ruby
 ActiveSupport::Inflector.inflections(:en) do |inflect|
-  inflect.acronym 'HTML'
+  inflect.acronym "HTML"
+  inflect.acronym "SSL"
 end
 ```
 
-Doing so affects how Active Support inflects globally. That may be fine in some applications, but perhaps you prefer a more controlled technique that does not have a global effect. In such case, you can override the actual inflector in an initializer:
+Doing so affects how Active Support inflects globally. That may be fine in some applications, but you can also customize how to camelize individual basenames independently from Active Support by passing a collection of overrides to the default inflectors:
 
 ```ruby
 # config/initializers/zeitwerk.rb
-inflector = Object.new
-def inflector.camelize(basename, _abspath)
-  basename == "html_parser" ? "HTMLParser" : basename.camelize
-end
-
 Rails.autoloaders.each do |autoloader|
-  autoloader.inflector = inflector
+  autoloader.inflector.inflect(
+    "html_parser" => "HTMLParser",
+    "ssl_error"   => "SSLError"
+  )
 end
 ```
 
-As you see, that still uses `String#camelize` as fallback. If you instead prefer not to depend on Active Support inflections at all and have absolute control over inflections, do this instead:
+That technique still depends on `String#camelize`, though, because that is what the default inflectors use as fallback. If you instead prefer not to depend on Active Support inflections at all and have absolute control over inflections, configure the inflectors to be instances of `Zeitwerk::Inflector`:
 
 ```ruby
 # config/initializers/zeitwerk.rb
-inflector = Class.new(Zeitwerk::Inflector) do
-  def camelize(basename, _abspath)
-    basename == "html_parser" ? "HTMLParser" : super
-  end
-end.new
-
 Rails.autoloaders.each do |autoloader|
-  autoloader.inflector = inflector
+  autoloader.inflector = Zeitwerk::Inflector.new
+  autoloader.inflector.inflect(
+    "html_parser" => "HTMLParser",
+    "ssl_error"   => "SSLError"
+  )
 end
 ```
 
-Please, check the [Zeitwerk documentation](https://github.com/fxn/zeitwerk#custom-inflector) for further details.
+There is no global configuration that can affect said instances, they are deterministic.
+
+You can even define a custom inflector for full flexibility. Please, check the [Zeitwerk documentation](https://github.com/fxn/zeitwerk#custom-inflector) for further details.
 
 Troubleshooting
 ---------------

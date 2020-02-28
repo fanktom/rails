@@ -58,9 +58,9 @@ module ActiveRecord
       end
 
       def test_pool_has_reaper
-        config = ActiveRecord::Base.configurations.configs_for(env_name: "arunit", spec_name: "primary")
-        spec = ConnectionSpecification.new("primary", config)
-        pool = ConnectionPool.new spec
+        config = ActiveRecord::Base.configurations.configs_for(env_name: "arunit", name: "primary")
+        pool_config = PoolConfig.new("primary", config)
+        pool = ConnectionPool.new(pool_config)
 
         assert pool.reaper
       ensure
@@ -68,10 +68,8 @@ module ActiveRecord
       end
 
       def test_reaping_frequency_configuration
-        spec = duplicated_spec
-        spec.db_config.configuration_hash[:reaping_frequency] = "10.01"
-
-        pool = ConnectionPool.new spec
+        pool_config = duplicated_pool_config(reaping_frequency: "10.01")
+        pool = ConnectionPool.new(pool_config)
 
         assert_equal 10.01, pool.reaper.frequency
       ensure
@@ -79,10 +77,8 @@ module ActiveRecord
       end
 
       def test_connection_pool_starts_reaper
-        spec = duplicated_spec
-        spec.db_config.configuration_hash[:reaping_frequency] = "0.0001"
-
-        pool = ConnectionPool.new spec
+        pool_config = duplicated_pool_config(reaping_frequency: "0.0001")
+        pool = ConnectionPool.new(pool_config)
 
         conn, child = new_conn_in_thread(pool)
 
@@ -97,11 +93,10 @@ module ActiveRecord
       end
 
       def test_reaper_works_after_pool_discard
-        spec = duplicated_spec
-        spec.db_config.configuration_hash[:reaping_frequency] = "0.0001"
+        pool_config = duplicated_pool_config(reaping_frequency: "0.0001")
 
         2.times do
-          pool = ConnectionPool.new spec
+          pool = ConnectionPool.new(pool_config)
 
           conn, child = new_conn_in_thread(pool)
 
@@ -119,39 +114,39 @@ module ActiveRecord
       # This doesn't test the reaper directly, but we want to test the action
       # it would take on a discarded pool
       def test_reap_flush_on_discarded_pool
-        spec = duplicated_spec
-        pool = ConnectionPool.new spec
+        pool_config = duplicated_pool_config
+        pool = ConnectionPool.new(pool_config)
 
         pool.discard!
         pool.reap
         pool.flush
       end
 
-      def test_connection_pool_starts_reaper_in_fork
-        spec = duplicated_spec
-        spec.db_config.configuration_hash[:reaping_frequency] = "0.0001"
+      if Process.respond_to?(:fork)
+        def test_connection_pool_starts_reaper_in_fork
+          pool_config = duplicated_pool_config(reaping_frequency: "0.0001")
+          pool = ConnectionPool.new(pool_config)
+          pool.checkout
 
-        pool = ConnectionPool.new spec
-        pool.checkout
+          pid = fork do
+            pool = ConnectionPool.new(pool_config)
 
-        pid = fork do
-          pool = ConnectionPool.new spec
+            conn, child = new_conn_in_thread(pool)
+            child.terminate
 
-          conn, child = new_conn_in_thread(pool)
-          child.terminate
-
-          wait_for_conn_idle(conn)
-          if conn.in_use?
-            exit!(1)
-          else
-            exit!(0)
+            wait_for_conn_idle(conn)
+            if conn.in_use?
+              exit!(1)
+            else
+              exit!(0)
+            end
           end
-        end
 
-        Process.waitpid(pid)
-        assert $?.success?
-      ensure
-        pool.discard!
+          Process.waitpid(pid)
+          assert $?.success?
+        ensure
+          pool.discard!
+        end
       end
 
       def test_reaper_does_not_reap_discarded_connection_pools
@@ -173,10 +168,10 @@ module ActiveRecord
       end
 
       private
-        def duplicated_spec
-          old_config = ActiveRecord::Base.connection_pool.spec.db_config.configuration_hash
+        def duplicated_pool_config(merge_config_options = {})
+          old_config = ActiveRecord::Base.connection_pool.db_config.configuration_hash.merge(merge_config_options)
           db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new("arunit", "primary", old_config.dup)
-          ConnectionSpecification.new("primary", db_config)
+          PoolConfig.new("primary", db_config)
         end
 
         def new_conn_in_thread(pool)

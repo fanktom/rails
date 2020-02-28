@@ -37,7 +37,7 @@ module ActiveRecord
             nodes = arel.constraints.first
 
             others = nodes.children.extract! do |node|
-              Arel.fetch_attribute(node) { |attr| attr.relation.name != table.name }
+              !Arel.fetch_attribute(node) { |attr| attr.relation.name == table.name }
             end
 
             joins << table.create_join(table, table.create_on(nodes), join_type)
@@ -63,6 +63,12 @@ module ActiveRecord
           return @readonly if defined?(@readonly)
 
           @readonly = reflection.scope && reflection.scope_for(base_klass.unscoped).readonly_value
+        end
+
+        def strict_loading?
+          return @strict_loading if defined?(@strict_loading)
+
+          @strict_loading = reflection.scope && reflection.scope_for(base_klass.unscoped).strict_loading_value
         end
 
         private

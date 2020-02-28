@@ -954,7 +954,6 @@ class TransactionalFixturesOnConnectionNotification < ActiveRecord::TestCase
         payload = {
           spec_name: "book",
           config: nil,
-          connection_id: connection.object_id
         }
 
         message_bus.instrument("!connection.active_record", payload) { }
@@ -1390,15 +1389,11 @@ end
 
 class MultipleDatabaseFixturesTest < ActiveRecord::TestCase
   test "enlist_fixture_connections ensures multiple databases share a connection pool" do
+    old_handlers = ActiveRecord::Base.connection_handlers
+    ActiveRecord::Base.connection_handlers = {}
+
     with_temporary_connection_pool do
       ActiveRecord::Base.connects_to database: { writing: :arunit, reading: :arunit2 }
-
-      rw_conn = ActiveRecord::Base.connection
-      ro_conn = ActiveRecord::Base.connection_handlers[:reading].connection_pool_list.first.connection
-
-      assert_not_equal rw_conn, ro_conn
-
-      enlist_fixture_connections
 
       rw_conn = ActiveRecord::Base.connection
       ro_conn = ActiveRecord::Base.connection_handlers[:reading].connection_pool_list.first.connection
@@ -1406,17 +1401,16 @@ class MultipleDatabaseFixturesTest < ActiveRecord::TestCase
       assert_equal rw_conn, ro_conn
     end
   ensure
-    ActiveRecord::Base.connection_handlers = { writing: ActiveRecord::Base.connection_handler }
+    ActiveRecord::Base.connection_handlers = old_handlers
   end
 
   private
     def with_temporary_connection_pool
-      old_pool = ActiveRecord::Base.connection_handler.retrieve_connection_pool(ActiveRecord::Base.connection_specification_name)
-      new_pool = ActiveRecord::ConnectionAdapters::ConnectionPool.new ActiveRecord::Base.connection_pool.spec
-      ActiveRecord::Base.connection_handler.send(:owner_to_pool)["primary"] = new_pool
+      pool_config = ActiveRecord::Base.connection_handler.send(:owner_to_pool_manager).fetch("ActiveRecord::Base").get_pool_config(:default)
+      new_pool = ActiveRecord::ConnectionAdapters::ConnectionPool.new(pool_config)
 
-      yield
-    ensure
-      ActiveRecord::Base.connection_handler.send(:owner_to_pool)["primary"] = old_pool
+      pool_config.stub(:pool, new_pool) do
+        yield
+      end
     end
 end

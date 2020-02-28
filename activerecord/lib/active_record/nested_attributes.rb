@@ -288,7 +288,7 @@ module ActiveRecord
       # [:allow_destroy]
       #   If true, destroys any members from the attributes hash with a
       #   <tt>_destroy</tt> key and a value that evaluates to +true+
-      #   (eg. 1, '1', true, or 'true'). This option is off by default.
+      #   (e.g. 1, '1', true, or 'true'). This option is off by default.
       # [:reject_if]
       #   Allows you to specify a Proc or a Symbol pointing to a method
       #   that checks whether a record should be built for a certain attribute
@@ -509,7 +509,7 @@ module ActiveRecord
               if target_record
                 existing_record = target_record
               else
-                association.add_to_target(existing_record, :skip_callbacks)
+                association.add_to_target(existing_record, skip_callbacks: true)
               end
 
               assign_to_or_mark_for_destruction(existing_record, attributes, options[:allow_destroy])

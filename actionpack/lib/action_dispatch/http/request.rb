@@ -45,6 +45,8 @@ module ActionDispatch
         SERVER_ADDR
         ].freeze
 
+    # TODO: Remove SERVER_ADDR when we remove support to Rack 2.1.
+    # See https://github.com/rack/rack/commit/c173b188d81ee437b588c1e046a1c9f031dea550
     ENV_METHODS.each do |env|
       class_eval <<-METHOD, __FILE__, __LINE__ + 1
         def #{env.sub(/^HTTP_/n, '').downcase}  # def accept_charset
@@ -86,7 +88,15 @@ module ActionDispatch
       if name
         controller_param = name.underscore
         const_name = controller_param.camelize << "Controller"
-        ActiveSupport::Dependencies.constantize(const_name)
+        begin
+          ActiveSupport::Dependencies.constantize(const_name)
+        rescue NameError => error
+          if error.missing_name == const_name || const_name.start_with?("#{error.missing_name}::")
+            raise MissingController.new(error.message, error.name)
+          else
+            raise
+          end
+        end
       else
         PASS_NOT_FOUND
       end
@@ -281,6 +291,7 @@ module ActionDispatch
     end
 
     def remote_ip=(remote_ip)
+      @remote_ip = nil
       set_header "action_dispatch.remote_ip", remote_ip
     end
 
@@ -426,3 +437,5 @@ module ActionDispatch
       end
   end
 end
+
+ActiveSupport.run_load_hooks :action_dispatch_request, ActionDispatch::Request

@@ -117,7 +117,7 @@ module ActiveRecord
 
     def test_current_database
       if @connection.respond_to?(:current_database)
-        assert_equal ARTest.connection_config["arunit"]["database"], @connection.current_database
+        assert_equal ARTest.test_configuration_hashes["arunit"]["database"], @connection.current_database
       end
     end
 
@@ -145,9 +145,10 @@ module ActiveRecord
 
       def test_not_specifying_database_name_for_cross_database_selects
         assert_nothing_raised do
-          ActiveRecord::Base.establish_connection(ActiveRecord::Base.configurations["arunit"].except(:database))
+          db_config = ActiveRecord::Base.configurations.configs_for(env_name: "arunit", name: "primary")
+          ActiveRecord::Base.establish_connection(db_config.configuration_hash.except(:database))
 
-          config = ARTest.connection_config
+          config = ARTest.test_configuration_hashes
           ActiveRecord::Base.connection.execute(
             "SELECT #{config['arunit']['database']}.pirates.*, #{config['arunit2']['database']}.courses.* " \
             "FROM #{config['arunit']['database']}.pirates, #{config['arunit2']['database']}.courses"
@@ -231,6 +232,20 @@ module ActiveRecord
       @connection_handler.while_preventing_writes do
         result = @connection.select_all("SELECT subscribers.* FROM subscribers WHERE nick = '138853948594'")
         assert_equal 1, result.length
+      end
+    end
+
+    if ActiveRecord::Base.connection.supports_common_table_expressions?
+      def test_doesnt_error_when_a_read_query_with_a_cte_is_called_while_preventing_writes
+        @connection.insert("INSERT INTO subscribers(nick) VALUES ('138853948594')")
+
+        @connection_handler.while_preventing_writes do
+          result = @connection.select_all(<<~SQL)
+            WITH matching_subscribers AS (SELECT subscribers.* FROM subscribers WHERE nick = '138853948594')
+            SELECT * FROM matching_subscribers
+          SQL
+          assert_equal 1, result.length
+        end
       end
     end
 

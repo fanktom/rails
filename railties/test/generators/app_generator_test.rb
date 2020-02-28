@@ -212,7 +212,7 @@ class AppGeneratorTest < Rails::Generators::TestCase
 
   def test_new_application_doesnt_need_defaults
     run_generator
-    assert_no_file "config/initializers/new_framework_defaults_6_0.rb"
+    assert_no_file "config/initializers/new_framework_defaults_6_1.rb"
   end
 
   def test_new_application_load_defaults
@@ -269,14 +269,14 @@ class AppGeneratorTest < Rails::Generators::TestCase
     app_root = File.join(destination_root, "myapp")
     run_generator [app_root]
 
-    assert_no_file "#{app_root}/config/initializers/new_framework_defaults_6_0.rb"
+    assert_no_file "#{app_root}/config/initializers/new_framework_defaults_6_1.rb"
 
     stub_rails_application(app_root) do
       generator = Rails::Generators::AppGenerator.new ["rails"], { update: true }, { destination_root: app_root, shell: @shell }
       generator.send(:app_const)
       quietly { generator.send(:update_config_files) }
 
-      assert_file "#{app_root}/config/initializers/new_framework_defaults_6_0.rb"
+      assert_file "#{app_root}/config/initializers/new_framework_defaults_6_1.rb"
     end
   end
 
@@ -836,6 +836,7 @@ class AppGeneratorTest < Rails::Generators::TestCase
     assert_gem "spring"
     assert_file("config/environments/test.rb") do |contents|
       assert_match("config.cache_classes = false", contents)
+      assert_match("config.action_view.cache_template_loading = true", contents)
     end
   end
 
@@ -1022,7 +1023,6 @@ class AppGeneratorTest < Rails::Generators::TestCase
       lib/tasks
       lib/assets
       log
-      test/fixtures
       test/fixtures/files
       test/controllers
       test/mailers
@@ -1132,7 +1132,6 @@ class AppGeneratorTest < Rails::Generators::TestCase
 
     def assert_listen_related_configuration
       assert_gem "listen"
-      assert_gem "spring-watcher-listen"
 
       assert_file "config/environments/development.rb" do |content|
         assert_match(/^\s*config\.file_watcher = ActiveSupport::EventedFileUpdateChecker/, content)

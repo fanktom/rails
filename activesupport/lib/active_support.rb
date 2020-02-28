@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 #--
-# Copyright (c) 2005-2019 David Heinemeier Hansson
+# Copyright (c) 2005-2020 David Heinemeier Hansson
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -35,6 +35,7 @@ module ActiveSupport
 
   autoload :Concern
   autoload :ActionableError
+  autoload :ConfigurationFile
   autoload :CurrentAttributes
   autoload :Dependencies
   autoload :DescendantsTracker
@@ -42,6 +43,7 @@ module ActiveSupport
   autoload :Executor
   autoload :FileUpdateChecker
   autoload :EventedFileUpdateChecker
+  autoload :ForkTracker
   autoload :LogSubscriber
   autoload :Notifications
   autoload :Reloader

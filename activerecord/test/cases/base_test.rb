@@ -77,6 +77,22 @@ class BasicsTest < ActiveRecord::TestCase
     assert_equal "Post::GeneratedRelationMethods", mod.inspect
   end
 
+  def test_incomplete_schema_loading
+    topic = Topic.first
+    payload = { foo: 42 }
+    topic.update!(content: payload)
+
+    Topic.reset_column_information
+
+    Topic.connection.stub(:lookup_cast_type_from_column, ->(_) { raise "Some Error" }) do
+      assert_raises RuntimeError do
+        Topic.columns_hash
+      end
+    end
+
+    assert_equal payload, Topic.first.content
+  end
+
   def test_column_names_are_escaped
     conn      = ActiveRecord::Base.connection
     classname = conn.class.name[/[^:]*$/]
@@ -1154,7 +1170,7 @@ class BasicsTest < ActiveRecord::TestCase
 
   def test_current_scope_is_reset
     Object.const_set :UnloadablePost, Class.new(ActiveRecord::Base)
-    UnloadablePost.send(:current_scope=, UnloadablePost.all)
+    UnloadablePost.current_scope = UnloadablePost.all
 
     UnloadablePost.unloadable
     klass = UnloadablePost
@@ -1573,6 +1589,14 @@ class BasicsTest < ActiveRecord::TestCase
         end
       end
     end
+  end
+
+  test "cannot call connected_to on subclasses of ActiveRecord::Base" do
+    error = assert_raises(NotImplementedError) do
+      Bird.connected_to(role: :reading) { }
+    end
+
+    assert_equal "connected_to can only be called on ActiveRecord::Base", error.message
   end
 
   test "preventing writes applies to all connections on a handler" do

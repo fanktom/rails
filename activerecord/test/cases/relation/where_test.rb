@@ -167,7 +167,7 @@ module ActiveRecord
 
       message = <<~MSG.squish
         NOT conditions will no longer behave as NOR in Rails 6.1.
-        To continue using NOR conditions, NOT each conditions manually
+        To continue using NOR conditions, NOT each condition individually
         (`.where.not(:estimate_of_type => ...).where.not(:estimate_of_id => ...)`).
       MSG
       actual = assert_deprecated(message) do
@@ -179,6 +179,23 @@ module ActiveRecord
       # NOT (estimate_of_type = 'Treasure' OR estimate_of_id = sapphire.id) matches only `cars(:honda)` unfortunately.
       assert_not_equal expected, actual.sort_by(&:id).map(&:estimate_of)
       assert_equal all - expected, only.sort_by(&:id).map(&:estimate_of)
+    end
+
+    def test_where_not_association_as_nor_is_deprecated
+      treasure = Treasure.create!(name: "my_treasure")
+      PriceEstimate.create!(estimate_of: treasure, price: 2, currency: "USD")
+      PriceEstimate.create!(estimate_of: treasure, price: 2, currency: "EUR")
+
+      message = <<~MSG.squish
+        NOT conditions will no longer behave as NOR in Rails 6.1.
+        To continue using NOR conditions, NOT each condition individually
+        (`.where.not(:price_estimates => { :price => ... }).where.not(:price_estimates => { :currency => ... })`).
+      MSG
+      assert_deprecated(message) do
+        result = Treasure.joins(:price_estimates).where.not(price_estimates: { price: 2, currency: "USD" })
+
+        assert_predicate result, :empty?
+      end
     end
 
     def test_polymorphic_nested_array_where
